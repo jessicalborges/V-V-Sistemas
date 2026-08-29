@@ -14,6 +14,7 @@ export default function PDV() {
   const [clienteSelecionado, setClienteSelecionado] = useState('')
   const [formaPagamento, setFormaPagamento] = useState('pix')
   const [valorPago, setValorPago] = useState('')
+  const [parcelas, setParcelas] = useState(1)
 
   useEffect(() => {
     carregarDados()
@@ -21,13 +22,11 @@ export default function PDV() {
 
   const carregarDados = async () => {
     setLoading(true)
-    // Carregar Produtos
     const { data: dataProdutos } = await supabase
       .from('produtos')
       .select('*')
       .order('nome', { ascending: true })
 
-    // Carregar Clientes
     const { data: dataClientes } = await supabase
       .from('clientes')
       .select('id, nome')
@@ -71,10 +70,16 @@ export default function PDV() {
 
   const total = carrinho.reduce((acc, item) => acc + item.preco * item.quantidade, 0)
   const troco = parseFloat(valorPago) - total > 0 ? parseFloat(valorPago) - total : 0
+  const valorParcela = total / parcelas
 
   const finalizarVenda = async () => {
     if (carrinho.length === 0) {
       alert('Adicione ao menos um produto ao carrinho!')
+      return
+    }
+
+    if (formaPagamento === 'crediario' && !clienteSelecionado) {
+      alert('Selecione um cliente para realizar vendas no Crediário!')
       return
     }
 
@@ -84,6 +89,7 @@ export default function PDV() {
         {
           cliente_id: clienteSelecionado || null,
           forma_pagamento: formaPagamento,
+          parcelas: ['cartao_credito', 'crediario'].includes(formaPagamento) ? parcelas : 1,
           total: total,
           valor_pago: parseFloat(valorPago) || total,
           troco: troco,
@@ -96,7 +102,6 @@ export default function PDV() {
       return
     }
 
-    // Registrar itens da venda
     if (venda && venda[0]) {
       const itensVenda = carrinho.map((item) => ({
         venda_id: venda[0].id,
@@ -112,6 +117,7 @@ export default function PDV() {
     setCarrinho([])
     setClienteSelecionado('')
     setValorPago('')
+    setParcelas(1)
   }
 
   const produtosFiltrados = produtos.filter((p) =>
@@ -120,7 +126,7 @@ export default function PDV() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6 text-slate-100">
-      {/* Coluna 1 e 2: Produtos e Busca */}
+      {/* Produtos e Busca */}
       <div className="lg:col-span-2 space-y-4">
         <h1 className="text-2xl font-bold">Caixa / PDV</h1>
 
@@ -152,7 +158,7 @@ export default function PDV() {
         )}
       </div>
 
-      {/* Coluna 3: Carrinho, Cliente, Pagamento e Resumo */}
+      {/* Carrinho, Cliente, Pagamento e Resumo */}
       <div className="bg-slate-800 p-5 rounded-xl border border-slate-700 flex flex-col justify-between space-y-6">
         <div>
           <h2 className="text-lg font-bold mb-3 border-b border-slate-700 pb-2">
@@ -201,7 +207,7 @@ export default function PDV() {
           )}
         </div>
 
-        {/* Identificação do Cliente */}
+        {/* Cliente */}
         <div className="space-y-1">
           <label className="text-xs font-semibold text-slate-400 uppercase">Cliente</label>
           <select
@@ -218,7 +224,7 @@ export default function PDV() {
           </select>
         </div>
 
-        {/* Seleção da Forma de Pagamento */}
+        {/* Pagamento */}
         <div className="space-y-2">
           <label className="text-xs font-semibold text-slate-400 uppercase">
             Forma de Pagamento
@@ -229,10 +235,14 @@ export default function PDV() {
               { id: 'dinheiro', label: 'Dinheiro' },
               { id: 'cartao_credito', label: 'Crédito' },
               { id: 'cartao_debito', label: 'Débito' },
+              { id: 'crediario', label: 'Crediário' },
             ].map((metodo) => (
               <button
                 key={metodo.id}
-                onClick={() => setFormaPagamento(metodo.id)}
+                onClick={() => {
+                  setFormaPagamento(metodo.id)
+                  if (!['cartao_credito', 'crediario'].includes(metodo.id)) setParcelas(1)
+                }}
                 className={`p-2 rounded-lg border font-semibold text-xs transition ${
                   formaPagamento === metodo.id
                     ? 'bg-blue-600 border-blue-400 text-white'
@@ -244,6 +254,25 @@ export default function PDV() {
             ))}
           </div>
 
+          {/* Seleção de Parcelas */}
+          {['cartao_credito', 'crediario'].includes(formaPagamento) && (
+            <div className="pt-2">
+              <label className="block text-xs text-slate-400 mb-1">Número de Parcelas</label>
+              <select
+                value={parcelas}
+                onChange={(e) => setParcelas(Number(e.target.value))}
+                className="w-full p-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none"
+              >
+                {Array.from({ length: 12 }, (_, i) => i + 1).map((num) => (
+                  <option key={num} value={num}>
+                    {num}x de R$ {(total / num || 0).toFixed(2)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Troco */}
           {formaPagamento === 'dinheiro' && (
             <div className="grid grid-cols-2 gap-2 pt-2">
               <div>
@@ -266,7 +295,7 @@ export default function PDV() {
           )}
         </div>
 
-        {/* Resumo Final e Ação */}
+        {/* Resumo Final */}
         <div className="pt-2 border-t border-slate-700 space-y-3">
           <div className="flex justify-between items-center">
             <span className="text-sm text-slate-400">Total</span>
