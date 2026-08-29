@@ -1,15 +1,33 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { supabase } from './supabase'
 
 export default function Home() {
   const [darkMode, setDarkMode] = useState(true)
   const [chatOpen, setChatOpen] = useState(false)
   const [mensagem, setMensagem] = useState('')
+  const [usuarioEmail, setUsuarioEmail] = useState<string | null>(null)
   const [historico, setHistorico] = useState([
     { remetente: 'bot', texto: 'Olá! Sou o Assistente V&V. Como posso ajudar você hoje com dúvidas ou relatos de erros?' }
   ])
+
+  useEffect(() => {
+    obterUsuarioLogado()
+  }, [])
+
+  const obterUsuarioLogado = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user?.email) {
+      setUsuarioEmail(user.email)
+    }
+  }
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
+    setUsuarioEmail(null)
+  }
 
   const enviarMensagem = (e: React.FormEvent) => {
     e.preventDefault()
@@ -29,6 +47,8 @@ export default function Home() {
       ])
     }, 1000)
   }
+
+  const nomeUsuario = usuarioEmail ? usuarioEmail.split('@')[0] : null
 
   return (
     <div className={`min-h-screen flex transition-colors duration-300 ${darkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-100 text-slate-900'}`}>
@@ -82,9 +102,25 @@ export default function Home() {
             </button>
           </div>
 
-          <Link href="/login" className={`flex items-center justify-center gap-2 w-full py-2.5 px-4 rounded-xl text-sm font-bold border transition ${darkMode ? 'bg-slate-950 border-slate-800 text-slate-300 hover:bg-slate-800 hover:text-white' : 'bg-slate-100 border-slate-300 text-slate-700 hover:bg-slate-200'}`}>
-            <span>🔑</span> Acessar Login
-          </Link>
+          {/* Exibição do Usuário Logado ou Botão de Login */}
+          {nomeUsuario ? (
+            <div className={`p-3 rounded-xl border flex items-center justify-between gap-2 ${darkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+              <div className="overflow-hidden">
+                <span className="text-[10px] text-slate-400 font-semibold block uppercase">Operador Logado</span>
+                <span className="text-sm font-bold text-blue-400 truncate block capitalize">{nomeUsuario}</span>
+              </div>
+              <button
+                onClick={handleLogout}
+                className="text-xs text-red-400 hover:text-red-300 font-bold px-2 py-1 rounded bg-red-500/10 hover:bg-red-500/20 transition"
+              >
+                Sair
+              </button>
+            </div>
+          ) : (
+            <Link href="/login" className={`flex items-center justify-center gap-2 w-full py-2.5 px-4 rounded-xl text-sm font-bold border transition ${darkMode ? 'bg-slate-950 border-slate-800 text-slate-300 hover:bg-slate-800 hover:text-white' : 'bg-slate-100 border-slate-300 text-slate-700 hover:bg-slate-200'}`}>
+              <span>🔑</span> Acessar Login
+            </Link>
+          )}
 
           <div className="flex items-center justify-between text-xs text-slate-500 px-2 pt-1">
             <span className="flex items-center gap-1.5">
@@ -97,9 +133,20 @@ export default function Home() {
 
       {/* Conteúdo Principal */}
       <main className="flex-1 p-8 space-y-8 relative">
-        <h1 className={`text-2xl font-bold flex items-center gap-2 ${darkMode ? 'text-white' : 'text-slate-900'}`}>
-          Visão Geral do Estoque 📊
-        </h1>
+        <div className="flex justify-between items-center">
+          <h1 className={`text-2xl font-bold flex items-center gap-2 ${darkMode ? 'text-white' : 'text-slate-900'}`}>
+            Visão Geral do Estoque 📊
+          </h1>
+
+          {/* Indicador de Usuário Superior */}
+          {nomeUsuario && (
+            <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 px-4 py-2 rounded-xl">
+              <span className="w-2.5 h-2.5 bg-green-400 rounded-full"></span>
+              <span className="text-xs text-slate-400">Usuário:</span>
+              <span className="text-xs font-bold text-white capitalize">{nomeUsuario}</span>
+            </div>
+          )}
+        </div>
 
         {/* Cards Informativos */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
