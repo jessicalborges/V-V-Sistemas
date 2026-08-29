@@ -26,21 +26,103 @@ export default function Relatorios() {
   const totalVendas = vendas.length
   const ticketMedio = totalVendas > 0 ? totalFaturado / totalVendas : 0
 
+  const imprimirRelatorio = () => {
+    window.print()
+  }
+
+  const exportarCSV = () => {
+    if (vendas.length === 0) {
+      alert('Não há dados para exportar!')
+      return
+    }
+
+    const cabecalho = ['Data/Hora', 'Operador', 'Cliente', 'Forma Pagamento', 'Total (R$)']
+    const linhas = vendas.map((v) => [
+      `"${new Date(v.created_at).toLocaleString('pt-BR')}"`,
+      `"${v.usuario ? v.usuario.split('@')[0] : 'Sistema'}"`,
+      `"${v.clientes?.nome || 'Cliente Avulso'}"`,
+      `"${v.forma_pagamento || ''}"`,
+      `"${Number(v.total).toFixed(2)}"`
+    ])
+
+    const conteudoCSV = [cabecalho.join(';'), ...linhas.map((e) => e.join(';'))].join('\n')
+    const blob = new Blob(['\ufeff' + conteudoCSV], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.setAttribute('href', url)
+    link.setAttribute('download', `relatorio_vendas_${new Date().toISOString().slice(0, 10)}.csv`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-8 text-slate-100">
-      <div className="flex justify-between items-center border-b border-slate-800 pb-4">
+      {/* Estilo CSS especial para Impressão / PDF */}
+      <style jsx global>{`
+        @media print {
+          body {
+            background-color: white !important;
+            color: black !important;
+          }
+          nav, button, header, aside, .no-print {
+            display: none !important;
+          }
+          .bg-slate-900, .bg-slate-950 {
+            background-color: white !important;
+            border: 1px solid #ccc !important;
+            color: black !important;
+          }
+          .text-white, .text-slate-100, .text-slate-300, .text-slate-400 {
+            color: black !important;
+          }
+          .text-green-400, .text-blue-400, .text-purple-400 {
+            color: black !important;
+            font-weight: bold !important;
+          }
+          table {
+            width: 100% !important;
+            border-collapse: collapse !important;
+          }
+          th, td {
+            border: 1px solid #ddd !important;
+            padding: 8px !important;
+            color: black !important;
+          }
+        }
+      `}</style>
+
+      {/* Cabeçalho */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-800 pb-4 gap-4">
         <div>
           <h1 className="text-3xl font-bold text-white">Relatórios & Métricas</h1>
           <p className="text-slate-400 text-sm">Acompanhamento consolidado do desempenho de vendas.</p>
         </div>
-        <button
-          onClick={carregarRelatorio}
-          className="bg-slate-800 hover:bg-slate-700 text-sm px-4 py-2 rounded-lg border border-slate-700 transition"
-        >
-          Atualizar Dados
-        </button>
+
+        {/* Botões de Ação */}
+        <div className="flex flex-wrap gap-3 no-print">
+          <button
+            onClick={carregarRelatorio}
+            className="bg-slate-800 hover:bg-slate-700 text-sm px-4 py-2 rounded-lg border border-slate-700 transition"
+          >
+            🔄 Atualizar Dados
+          </button>
+          <button
+            onClick={exportarCSV}
+            className="bg-green-700 hover:bg-green-600 text-sm px-4 py-2 rounded-lg font-bold transition text-white"
+          >
+            📊 Exportar Excel/CSV
+          </button>
+          <button
+            onClick={imprimirRelatorio}
+            className="bg-blue-600 hover:bg-blue-500 text-sm px-4 py-2 rounded-lg font-bold transition text-white"
+          >
+            🖨️ Imprimir / PDF
+          </button>
+        </div>
       </div>
 
+      {/* Cards de Métricas */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-1">
           <span className="text-xs font-semibold text-slate-400 uppercase">Faturamento Total</span>
@@ -58,6 +140,7 @@ export default function Relatorios() {
         </div>
       </div>
 
+      {/* Tabela de Vendas */}
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-4">
         <h2 className="text-xl font-bold text-white">Histórico das Últimas Vendas</h2>
 
