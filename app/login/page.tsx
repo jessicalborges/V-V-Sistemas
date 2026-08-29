@@ -5,7 +5,7 @@ import { supabase } from '../supabase'
 import { useRouter } from 'next/navigation'
 
 export default function Login() {
-  const [email, setEmail] = useState('')
+  const [loginInput, setLoginInput] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -16,13 +16,18 @@ export default function Login() {
     setLoading(true)
     setError('')
 
+    // Se o usuário não digitar "@", converte automaticamente para um formato aceito pelo Supabase
+    const emailFormatado = loginInput.includes('@') 
+      ? loginInput 
+      : `${loginInput.trim().toLowerCase()}@sistema.local`
+
     const { error } = await supabase.auth.signInWithPassword({
-      email,
+      email: emailFormatado,
       password,
     })
 
     if (error) {
-      setError(error.message)
+      setError('Usuário ou senha incorretos.')
       setLoading(false)
     } else {
       router.push('/pdv')
@@ -34,30 +39,34 @@ export default function Login() {
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 w-full max-w-md space-y-6">
         <div className="text-center space-y-2">
           <h1 className="text-2xl font-bold text-white">Acessar o Sistema</h1>
-          <p className="text-sm text-slate-400">Entre com suas credenciais do Supabase</p>
+          <p className="text-sm text-slate-400">Informe seu usuário e senha</p>
         </div>
 
         {error && (
-          <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-sm p-3 rounded-lg">
+          <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-sm p-3 rounded-lg text-center">
             {error}
           </div>
         )}
 
         <form onSubmit={handleLogin} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-slate-400 uppercase mb-2">E-mail</label>
+            <label className="block text-xs font-semibold text-slate-400 uppercase mb-2">
+              Usuário ou E-mail
+            </label>
             <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              type="text"
+              value={loginInput}
+              onChange={(e) => setLoginInput(e.target.value)}
               required
               className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-100 focus:outline-none focus:border-blue-500"
-              placeholder="seu@email.com"
+              placeholder="ex: caixa1 ou seu@email.com"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-400 uppercase mb-2">Senha</label>
+            <label className="block text-xs font-semibold text-slate-400 uppercase mb-2">
+              Senha
+            </label>
             <input
               type="password"
               value={password}
