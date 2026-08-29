@@ -7,34 +7,31 @@ export default function PDV() {
   const [produtos, setProdutos] = useState<any[]>([])
   const [clientes, setClientes] = useState<any[]>([])
   const [carrinho, setCarrinho] = useState<any[]>([])
-  const [busca, setBusca] = useState('')
-  const [loading, setLoading] = useState(true)
-
-  // Dados do fechamento
-  const [clienteSelecionado, setClienteSelecionado] = useState('')
-  const [formaPagamento, setFormaPagamento] = useState('pix')
-  const [valorPago, setValorPago] = useState('')
-  const [parcelas, setParcelas] = useState(1)
+  const [clienteId, setClienteId] = useState<string>('')
+  const [formaPagamento, setFormaPagamento] = useState<string>('dinheiro')
+  const [parcelas, setParcelas] = useState<number>(1)
+  const [valorPago, setValorPago] = useState<string>('')
+  const [busca, setBusca] = useState<string>('')
+  const [usuarioEmail, setUsuarioEmail] = useState<string>('Operador')
 
   useEffect(() => {
     carregarDados()
+    obterUsuario()
   }, [])
 
+  const obterUsuario = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user?.email) {
+      setUsuarioEmail(user.email)
+    }
+  }
+
   const carregarDados = async () => {
-    setLoading(true)
-    const { data: dataProdutos } = await supabase
-      .from('produtos')
-      .select('*')
-      .order('nome', { ascending: true })
+    const { data: prodData } = await supabase.from('produtos').select('*')
+    if (prodData) setProdutos(prodData)
 
-    const { data: dataClientes } = await supabase
-      .from('clientes')
-      .select('id, nome')
-      .order('nome', { ascending: true })
-
-    if (dataProdutos) setProdutos(dataProdutos)
-    if (dataClientes) setClientes(dataClientes)
-    setLoading(false)
+    const { data: cliData } = await supabase.from('clientes').select('*')
+    if (cliData) setClientes(cliData)
   }
 
   const adicionarAoCarrinho = (produto: any) => {
@@ -42,7 +39,9 @@ export default function PDV() {
     if (itemExistente) {
       setCarrinho(
         carrinho.map((item) =>
-          item.id === produto.id ? { ...item, quantidade: item.quantidade + 1 } : item
+          item.id === produto.id
+            ? { ...item, quantidade: item.quantidade + 1 }
+            : item
         )
       )
     } else {
@@ -69,55 +68,67 @@ export default function PDV() {
   }
 
   const total = carrinho.reduce((acc, item) => acc + item.preco * item.quantidade, 0)
-  const troco = parseFloat(valorPago) - total > 0 ? parseFloat(valorPago) - total : 0
-  const valorParcela = total / parcelas
+  const numValorPago = parseFloat(valorPago.replace(',', '.')) || 0
+  const troco = numValorPago > total ? numValorPago - total : 0
 
   const finalizarVenda = async () => {
     if (carrinho.length === 0) {
-      alert('Adicione ao menos um produto ao carrinho!')
+      alert('O carrinho está vazio!')
       return
     }
 
-    if (formaPagamento === 'crediario' && !clienteSelecionado) {
-      alert('Selecione um cliente para realizar vendas no Crediário!')
+    if (formaPagamento === 'dinheiro' && numValorPago < total) {
+      alert('O valor pago é menor que o total da compra!')
       return
     }
 
-    const { data: venda, error: errorVenda } = await supabase
-      .from('vendas')
-      .insert([
-        {
-          cliente_id: clienteSelecionado || null,
-          forma_pagamento: formaPagamento,
-          parcelas: ['cartao_credito', 'crediario'].includes(formaPagamento) ? parcelas : 1,
-          total: total,
-          valor_pago: parseFloat(valorPago) || total,
-          troco: troco,
-        },
-      ])
-      .select()
+    try {
+      // Ajuste de fuso horário para Brasília (UTC-3)
+      const dataAtual = new Date()
+      const dataBrasil = new Date(dataAtual.getTime() - (3 * 60 * 60 * 1000)).toISOString()
 
-    if (errorVenda) {
-      alert('Erro ao registrar venda: ' + errorVenda.message)
-      return
-    }
+      const { data: venda, error: erroVenda } = await supabase
+        .from('vendas')
+        .insert([
+          {
+            cliente_id: clienteId ? clienteId : null,
+            forma_pagamento: formaPagamento,
+            parcelas: parcelas,
+            total: total,
+            valor_pago: numValorPago,
+            troco: troco,
+            usuario: usuarioEmail,
+            created_at: dataBrasil
+          }
+        ])
+        .select()
+        .single()
 
-    if (venda && venda[0]) {
-      const itensVenda = carrinho.map((item) => ({
-        venda_id: venda[0].id,
+      if (erroVenda) throw erroVenda
+
+      const itensParaInserir = carrinho.map((item) => ({
+        venda_id: venda.id,
         produto_id: item.id,
         quantidade: item.quantidade,
         preco_unitario: item.preco,
+        created_at: dataBrasil
       }))
 
-      await supabase.from('itens_venda').insert(itensVenda)
-    }
+      const { error: erroItens } = await supabase
+        .from('itens_venda')
+        .insert(itensParaInserir)
 
-    alert('Venda finalizada com sucesso!')
-    setCarrinho([])
-    setClienteSelecionado('')
-    setValorPago('')
-    setParcelas(1)
+      if (erroItens) throw erroItens
+
+      alert('Venda realizada com sucesso!')
+      setCarrinho([])
+      setValorPago('')
+      setClienteId('')
+      setFormaPagamento('dinheiro')
+      setParcelas(1)
+    } catch (error: any) {
+      alert('Erro ao registrar venda: ' + error.message)
+    }
   }
 
   const produtosFiltrados = produtos.filter((p) =>
@@ -125,188 +136,149 @@ export default function PDV() {
   )
 
   return (
-    <div className="p-6 max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6 text-slate-100">
-      {/* Produtos e Busca */}
-      <div className="lg:col-span-2 space-y-4">
-        <h1 className="text-2xl font-bold">Caixa / PDV</h1>
+    <div className="min-h-screen bg-slate-950 text-slate-100 p-6 flex flex-col md:flex-row gap-6">
+      {/* Área da Esquerda: Busca e Produtos */}
+      <div className="flex-1 space-y-4">
+        <div className="flex justify-between items-center bg-slate-900 p-4 rounded-xl border border-slate-800">
+          <input
+            type="text"
+            placeholder="Buscar produto por nome..."
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2 text-slate-100 focus:outline-none focus:border-blue-500"
+          />
+        </div>
 
-        <input
-          type="text"
-          placeholder="Buscar produto por nome..."
-          value={busca}
-          onChange={(e) => setBusca(e.target.value)}
-          className="w-full p-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-blue-500"
-        />
-
-        {loading ? (
-          <p className="text-slate-400">Carregando produtos...</p>
-        ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 max-h-[500px] overflow-y-auto pr-2">
-            {produtosFiltrados.map((produto) => (
-              <button
-                key={produto.id}
-                onClick={() => adicionarAoCarrinho(produto)}
-                className="bg-slate-800 hover:bg-slate-700 p-4 rounded-lg border border-slate-700 text-left flex flex-col justify-between transition"
-              >
-                <span className="font-semibold text-sm line-clamp-2">{produto.nome}</span>
-                <span className="text-green-400 font-bold mt-2">
-                  R$ {Number(produto.preco).toFixed(2)}
-                </span>
-              </button>
-            ))}
-          </div>
-        )}
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          {produtosFiltrados.map((prod) => (
+            <div
+              key={prod.id}
+              onClick={() => adicionarAoCarrinho(prod)}
+              className="bg-slate-900 border border-slate-800 hover:border-blue-500 p-4 rounded-xl cursor-pointer transition flex flex-col justify-between space-y-2"
+            >
+              <div>
+                <h3 className="font-bold text-white text-sm">{prod.nome}</h3>
+                <p className="text-xs text-slate-400">Estoque: {prod.estoque ?? 0}</p>
+              </div>
+              <p className="text-green-400 font-bold">R$ {Number(prod.preco).toFixed(2)}</p>
+            </div>
+          ))}
+        </div>
       </div>
 
-      {/* Carrinho, Cliente, Pagamento e Resumo */}
-      <div className="bg-slate-800 p-5 rounded-xl border border-slate-700 flex flex-col justify-between space-y-6">
-        <div>
-          <h2 className="text-lg font-bold mb-3 border-b border-slate-700 pb-2">
-            Carrinho de Compras
-          </h2>
+      {/* Área da Direita: Carrinho e Fechamento */}
+      <div className="w-full md:w-96 bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-6 flex flex-col justify-between">
+        <div className="space-y-4">
+          <div className="flex justify-between items-center border-b border-slate-800 pb-2">
+            <h2 className="text-lg font-bold text-white">Carrinho de Compras</h2>
+            <span className="text-xs text-slate-400">Operador: {usuarioEmail.split('@')[0]}</span>
+          </div>
 
-          {carrinho.length === 0 ? (
-            <p className="text-slate-400 text-sm">Nenhum produto adicionado.</p>
-          ) : (
-            <div className="space-y-3 max-h-48 overflow-y-auto pr-1">
-              {carrinho.map((item) => (
-                <div
-                  key={item.id}
-                  className="flex items-center justify-between text-sm bg-slate-900 p-2 rounded-lg"
-                >
-                  <div className="flex-1 pr-2">
-                    <p className="font-medium truncate">{item.nome}</p>
-                    <p className="text-xs text-slate-400">
-                      R$ {Number(item.preco).toFixed(2)} x {item.quantidade}
-                    </p>
+          <div className="space-y-2 max-h-60 overflow-y-auto">
+            {carrinho.length === 0 ? (
+              <p className="text-slate-500 text-sm">Nenhum item adicionado.</p>
+            ) : (
+              carrinho.map((item) => (
+                <div key={item.id} className="flex justify-between items-center bg-slate-950 p-3 rounded-lg text-sm">
+                  <div>
+                    <p className="font-medium text-white">{item.nome}</p>
+                    <p className="text-xs text-slate-400">R$ {Number(item.preco).toFixed(2)} x {item.quantidade}</p>
                   </div>
-                  <div className="flex items-center space-x-1">
+                  <div className="flex items-center space-x-2">
                     <button
                       onClick={() => alterarQuantidade(item.id, -1)}
-                      className="px-2 py-0.5 bg-slate-700 rounded text-xs font-bold"
+                      className="bg-slate-800 hover:bg-slate-700 px-2 rounded text-slate-300"
                     >
                       -
                     </button>
-                    <span className="text-xs px-1">{item.quantidade}</span>
+                    <span>{item.quantidade}</span>
                     <button
                       onClick={() => alterarQuantidade(item.id, 1)}
-                      className="px-2 py-0.5 bg-slate-700 rounded text-xs font-bold"
+                      className="bg-slate-800 hover:bg-slate-700 px-2 rounded text-slate-300"
                     >
                       +
                     </button>
                     <button
                       onClick={() => removerDoCarrinho(item.id)}
-                      className="text-red-400 hover:text-red-300 ml-2 text-xs"
+                      className="text-red-400 hover:text-red-300 ml-2"
                     >
                       ✕
                     </button>
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Cliente */}
-        <div className="space-y-1">
-          <label className="text-xs font-semibold text-slate-400 uppercase">Cliente</label>
-          <select
-            value={clienteSelecionado}
-            onChange={(e) => setClienteSelecionado(e.target.value)}
-            className="w-full p-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none"
-          >
-            <option value="">Cliente Avulso (Não identificado)</option>
-            {clientes.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.nome}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Pagamento */}
-        <div className="space-y-2">
-          <label className="text-xs font-semibold text-slate-400 uppercase">
-            Forma de Pagamento
-          </label>
-          <div className="grid grid-cols-2 gap-2">
-            {[
-              { id: 'pix', label: 'Pix' },
-              { id: 'dinheiro', label: 'Dinheiro' },
-              { id: 'cartao_credito', label: 'Crédito' },
-              { id: 'cartao_debito', label: 'Débito' },
-              { id: 'crediario', label: 'Crediário' },
-            ].map((metodo) => (
-              <button
-                key={metodo.id}
-                onClick={() => {
-                  setFormaPagamento(metodo.id)
-                  if (!['cartao_credito', 'crediario'].includes(metodo.id)) setParcelas(1)
-                }}
-                className={`p-2 rounded-lg border font-semibold text-xs transition ${
-                  formaPagamento === metodo.id
-                    ? 'bg-blue-600 border-blue-400 text-white'
-                    : 'bg-slate-900 border-slate-700 text-slate-300'
-                }`}
-              >
-                {metodo.label}
-              </button>
-            ))}
+              ))
+            )}
           </div>
 
-          {/* Seleção de Parcelas */}
-          {['cartao_credito', 'crediario'].includes(formaPagamento) && (
-            <div className="pt-2">
-              <label className="block text-xs text-slate-400 mb-1">Número de Parcelas</label>
+          <div className="space-y-3 pt-4 border-t border-slate-800">
+            <div>
+              <label className="text-xs text-slate-400 font-semibold block mb-1">CLIENTE</label>
               <select
-                value={parcelas}
-                onChange={(e) => setParcelas(Number(e.target.value))}
-                className="w-full p-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none"
+                value={clienteId}
+                onChange={(e) => setClienteId(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-sm text-slate-200"
               >
-                {Array.from({ length: 12 }, (_, i) => i + 1).map((num) => (
-                  <option key={num} value={num}>
-                    {num}x de R$ {(total / num || 0).toFixed(2)}
+                <option value="">Cliente Avulso / Não Informado</option>
+                {clientes.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.nome}
                   </option>
                 ))}
               </select>
             </div>
-          )}
 
-          {/* Troco */}
-          {formaPagamento === 'dinheiro' && (
-            <div className="grid grid-cols-2 gap-2 pt-2">
-              <div>
-                <label className="block text-xs text-slate-400 mb-1">Valor Entregue</label>
-                <input
-                  type="number"
-                  placeholder="0.00"
-                  value={valorPago}
-                  onChange={(e) => setValorPago(e.target.value)}
-                  className="w-full p-2 bg-slate-900 border border-slate-700 rounded text-sm text-white"
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-slate-400 mb-1">Troco</label>
-                <div className="p-2 bg-slate-900 border border-slate-700 rounded text-sm text-green-400 font-bold">
-                  R$ {troco.toFixed(2)}
-                </div>
+            <div>
+              <label className="text-xs text-slate-400 font-semibold block mb-1">FORMA DE PAGAMENTO</label>
+              <div className="grid grid-cols-2 gap-2">
+                {['dinheiro', 'pix', 'credito', 'debito', 'crediario'].map((forma) => (
+                  <button
+                    key={forma}
+                    type="button"
+                    onClick={() => setFormaPagamento(forma)}
+                    className={`py-2 text-xs font-semibold rounded-lg capitalize border transition ${
+                      formaPagamento === forma
+                        ? 'bg-blue-600 text-white border-blue-500'
+                        : 'bg-slate-950 text-slate-400 border-slate-800 hover:border-slate-700'
+                    }`}
+                  >
+                    {forma}
+                  </button>
+                ))}
               </div>
             </div>
-          )}
+
+            {formaPagamento === 'dinheiro' && (
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs text-slate-400 block mb-1">Valor Entregue</label>
+                  <input
+                    type="text"
+                    value={valorPago}
+                    onChange={(e) => setValorPago(e.target.value)}
+                    placeholder="0,00"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-sm text-slate-100"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400 block mb-1">Troco</label>
+                  <div className="bg-slate-950 border border-slate-800 rounded-lg p-2 text-sm font-bold text-green-400">
+                    R$ {troco.toFixed(2)}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Resumo Final */}
-        <div className="pt-2 border-t border-slate-700 space-y-3">
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-slate-400">Total</span>
-            <span className="text-2xl font-extrabold text-green-400">
-              R$ {total.toFixed(2)}
-            </span>
+        <div className="space-y-4 border-t border-slate-800 pt-4">
+          <div className="flex justify-between items-center text-xl font-bold">
+            <span>Total</span>
+            <span className="text-green-400">R$ {total.toFixed(2)}</span>
           </div>
 
           <button
             onClick={finalizarVenda}
-            className="w-full py-3 bg-green-600 hover:bg-green-500 text-white font-bold rounded-lg transition"
+            className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded-xl transition"
           >
             Finalizar Venda
           </button>
