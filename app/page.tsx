@@ -55,13 +55,27 @@ export default function Home() {
       {/* Menu Lateral */}
       <aside className={`w-64 border-r p-4 flex flex-col justify-between ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
         <div className="space-y-6">
-          <div className="flex items-center gap-3 px-2">
-            <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center font-bold text-white text-lg">
-              V&V
+          {/* Logo + Indicador do Usuário Logado no Topo */}
+          <div className="space-y-3 px-2">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center font-bold text-white text-lg">
+                V&V
+              </div>
+              <div>
+                <h2 className={`font-bold text-base ${darkMode ? 'text-white' : 'text-slate-800'}`}>V-V Sistemas</h2>
+                <p className="text-xs text-slate-400">Gestão Inteligente</p>
+              </div>
             </div>
-            <div>
-              <h2 className={`font-bold text-base ${darkMode ? 'text-white' : 'text-slate-800'}`}>V-V Sistemas</h2>
-              <p className="text-xs text-slate-400">Gestão Inteligente</p>
+
+            {/* USUÁRIO NO TOPO (Seta Superior) */}
+            <div className={`p-2.5 rounded-lg border flex items-center gap-2 ${darkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+              <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+              <div className="overflow-hidden">
+                <span className="text-[10px] text-slate-400 font-semibold block uppercase leading-none">Operador</span>
+                <span className="text-xs font-bold text-blue-400 truncate block capitalize">
+                  {nomeUsuario || 'Não Logado'}
+                </span>
+              </div>
             </div>
           </div>
 
@@ -102,51 +116,37 @@ export default function Home() {
             </button>
           </div>
 
-          {/* Exibição do Usuário Logado ou Botão de Login */}
+          {/* Botão de Login / Logout */}
           {nomeUsuario ? (
-            <div className={`p-3 rounded-xl border flex items-center justify-between gap-2 ${darkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
-              <div className="overflow-hidden">
-                <span className="text-[10px] text-slate-400 font-semibold block uppercase">Operador Logado</span>
-                <span className="text-sm font-bold text-blue-400 truncate block capitalize">{nomeUsuario}</span>
-              </div>
-              <button
-                onClick={handleLogout}
-                className="text-xs text-red-400 hover:text-red-300 font-bold px-2 py-1 rounded bg-red-500/10 hover:bg-red-500/20 transition"
-              >
-                Sair
-              </button>
-            </div>
+            <button
+              onClick={handleLogout}
+              className="w-full py-2.5 px-4 rounded-xl text-sm font-bold bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition flex items-center justify-center gap-2"
+            >
+              <span>🚪</span> Sair da Conta
+            </button>
           ) : (
             <Link href="/login" className={`flex items-center justify-center gap-2 w-full py-2.5 px-4 rounded-xl text-sm font-bold border transition ${darkMode ? 'bg-slate-950 border-slate-800 text-slate-300 hover:bg-slate-800 hover:text-white' : 'bg-slate-100 border-slate-300 text-slate-700 hover:bg-slate-200'}`}>
               <span>🔑</span> Acessar Login
             </Link>
           )}
 
-          <div className="flex items-center justify-between text-xs text-slate-500 px-2 pt-1">
-            <span className="flex items-center gap-1.5">
-              <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-              Sistema Online
-            </span>
+          {/* USUÁRIO NO RODAPÉ (Seta Inferior) */}
+          <div className="pt-2 border-t border-slate-800/50">
+            <div className="flex items-center justify-between text-xs text-slate-400 px-2">
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                {nomeUsuario ? `Online: ${nomeUsuario}` : 'Sistema Online'}
+              </span>
+            </div>
           </div>
         </div>
       </aside>
 
       {/* Conteúdo Principal */}
       <main className="flex-1 p-8 space-y-8 relative">
-        <div className="flex justify-between items-center">
-          <h1 className={`text-2xl font-bold flex items-center gap-2 ${darkMode ? 'text-white' : 'text-slate-900'}`}>
-            Visão Geral do Estoque 📊
-          </h1>
-
-          {/* Indicador de Usuário Superior */}
-          {nomeUsuario && (
-            <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 px-4 py-2 rounded-xl">
-              <span className="w-2.5 h-2.5 bg-green-400 rounded-full"></span>
-              <span className="text-xs text-slate-400">Usuário:</span>
-              <span className="text-xs font-bold text-white capitalize">{nomeUsuario}</span>
-            </div>
-          )}
-        </div>
+        <h1 className={`text-2xl font-bold flex items-center gap-2 ${darkMode ? 'text-white' : 'text-slate-900'}`}>
+          Visão Geral do Estoque 📊
+        </h1>
 
         {/* Cards Informativos */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -207,7 +207,7 @@ export default function Home() {
           </Link>
         </div>
 
-        {/* Floating Chatbot */}
+        {/* Chatbot Flutuante */}
         <div className="fixed bottom-6 right-6 z-50">
           {chatOpen ? (
             <div className={`w-80 md:w-96 rounded-2xl border shadow-2xl flex flex-col overflow-hidden ${darkMode ? 'bg-slate-900 border-slate-800 text-slate-100' : 'bg-white border-slate-300 text-slate-900'}`}>
